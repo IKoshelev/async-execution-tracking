@@ -83,6 +83,8 @@ function executionEnds(target: any, methodName: string, executionStartId: number
 
 export const cancelationMessage = 'Async cancelation thrown.';
 
+export const throwCancelationError = () => {throw new Error(cancelationMessage)};
+
 export function getCurrentRunTracker<T>(target: T, methodName: keyof T) {
 
     const warningnMessage = 
@@ -118,7 +120,7 @@ export function getCurrentRunTracker<T>(target: T, methodName: keyof T) {
         isRunStillLatest,
         throwIfRunNotLatest: () => {
             if (isRunStillLatest() === false) {
-                throw new Error(cancelationMessage);
+                throwCancelationError();
             }
         },
     };

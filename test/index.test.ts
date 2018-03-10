@@ -3,6 +3,9 @@ import { expect } from 'chai';
 
 import { trackAsync, getCurrentRunTracker } from './../src/index';
 
+//todo typescript couldn't find setTimeout?
+declare function setTimeout(a:any, b:any ):void;
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const expectNotToGetToThisLine = () => expect.fail('Execution should not get to this line, '+ 
@@ -149,13 +152,13 @@ describe('For @trackAsync decorated methods ', () => {
 
                 @trackAsync()
                 async wrongTarget(){
-                    getCurrentRunTracker({}, 'wrongTarget');
+                    getCurrentRunTracker(new Subject(), 'wrongTarget');
                 }
 
                 @trackAsync()
                 async retrievedTooLate(){
                     await delay(25);
-                    getCurrentRunTracker({}, 'retrievedTooLate');
+                    getCurrentRunTracker(new Subject(), 'retrievedTooLate');
                 }
 
                 decoy(){}
