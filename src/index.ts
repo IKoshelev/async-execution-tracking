@@ -1,8 +1,8 @@
-export async function foo() {
-    return Promise.resolve(1);
-}
 
-type func = () => void;
+// tslint:disable-next-line:interface-name
+export declare interface Function {
+    currentRunTracker: ICurrentRunTracker;
+}
 
 export interface ITrackAsyncOptions {
     swallowCancelationException: boolean;
@@ -26,7 +26,12 @@ let globalExecutionStartIdCounter = 1;
 
 const executionTrackingDict: { [methodName: string]: TrackingData[] } = {};
 
-function executionStarts(target: any, methodName: string, options: ITrackAsyncOptions): number {
+interface IExecutioStartResult { 
+    runId: number;
+    tracker: ICurrentRunTracker;
+}
+
+function executionStarts(target: any, methodName: string, options: ITrackAsyncOptions): IExecutioStartResult {
     let allTrackingForMethodName = executionTrackingDict[methodName];
 
     if (!allTrackingForMethodName) {
@@ -47,11 +52,32 @@ function executionStarts(target: any, methodName: string, options: ITrackAsyncOp
     currentTargetAndMethodTracking.lastExecutionStartId = globalExecutionStartIdCounter;
 
     currentTargetAndMethodTracking.isLastStartStillExecuting = true;
+    
+    return getRunIdAndTracker(currentTargetAndMethodTracking);
 
-    return currentTargetAndMethodTracking.lastExecutionStartId;
+    function getRunIdAndTracker(trackingData: TrackingData) {
+
+        const runId = trackingData.lastExecutionStartId;
+
+        const isRunStillLatest = () => trackingData.lastExecutionStartId === runId;
+
+        const tracker: ICurrentRunTracker =  {
+            isRunStillLatest,
+            throwIfRunNotLatest: () => {
+                if (isRunStillLatest() === false) {
+                    throw new Error(cancelationMessage);
+                }
+            },
+        };
+    
+        return { 
+            runId ,
+            tracker ,
+        };
+    }
 }
 
-function executionEnd(target: any, methodName: string, executionStartId: number,  options: ITrackAsyncOptions) {
+function executionEnds(target: any, methodName: string, executionStartId: number,  options: ITrackAsyncOptions) {
     const allTrackingForMethodName = executionTrackingDict[methodName];
 
     if (!allTrackingForMethodName) {
@@ -83,58 +109,16 @@ function executionEnd(target: any, methodName: string, executionStartId: number,
 
 export const cancelationMessage = 'Async cancelation thrown.';
 
-export function getCurrentRunTracker<T>(target: T, methodName: keyof T) {
-
-    const warningnMessage = 
-    `This indicates a likely mistake, please make sure that a call to getCurrentRunTracker(intance, methodName) ` +
-    `is the first line inside the method decorated with trackAsync. At the very least, ` + 
-    `it should be called before first await or calls to other trackAsync methods.`;
-
-    if (target !== latestTrackAsyncTarget) {
-        throw new Error('Target passed does not match context of currenly starting trackAsyn method' + warningnMessage );
-    }
-
-    if (methodName !== latestTrackAsyncMethodName) {
-        throw new Error(`You are trying to get current run tracker for method ${methodName} ` +
-                        `while currently starting method decorated with trackAsync is ${latestTrackAsyncMethodName}. ` +
-                        warningnMessage );
-    }
-
-    const allTrackingForMethodName = executionTrackingDict[methodName];
-
-    if (!allTrackingForMethodName) {
-        throw new Error(`Unexpected state: could not get tracking info for method ${methodName}`);
-    }
-
-    const currentTargetAndMethodTracking = allTrackingForMethodName.find((x) => x.target === target);
-
-    if (!currentTargetAndMethodTracking) {
-        throw new Error(`Unexpected state: could not get tracking info for target instance`);
-    }
-
-    const latestRunIdDuringTrackerCreation = currentTargetAndMethodTracking.lastExecutionStartId;
-
-    const isRunStillLatest = () => currentTargetAndMethodTracking.lastExecutionStartId === latestRunIdDuringTrackerCreation;
-
-    return {
-        isRunStillLatest,
-        throwIfRunNotLatest: () => {
-            if (isRunStillLatest() === false) {
-                throw new Error(cancelationMessage);
-            }
-        },
-    };
+export interface ICurrentRunTracker {
+    isRunStillLatest: () => boolean;
+    throwIfRunNotLatest: () => void;
 }
 
-let latestTrackAsyncTarget: any = null;
-let latestTrackAsyncMethodName: any = null;
-
-// tslint:disable-next-line:no-shadowed-variable
 export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
 
     const finalOptions = { ...defaultTrackAsyncOptions, ...options };
 
-    return function(target: Object, key: string | Symbol, descriptor: TypedPropertyDescriptor<Function>) {
+    return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<() => Promise<any>>) {
         const originalFn = descriptor.value;
 
         if (typeof originalFn !== 'function') {
@@ -144,21 +128,22 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
         descriptor.value = function() {
             const arg = arguments;
 
-            const previousTrackAsyncTarget = latestTrackAsyncTarget;
-            const previousTrackAsyncMethodName = latestTrackAsyncMethodName;
+            const fnObjectOnTarget =  ((this as any) [key] as Function);
+            const previousTracker = fnObjectOnTarget.currentRunTracker;
 
-            latestTrackAsyncTarget = this;
-            latestTrackAsyncMethodName = key;
+            const executionStartResult = executionStarts(this, key, finalOptions);
+
+            fnObjectOnTarget.currentRunTracker = executionStartResult.tracker;
 
             const res = originalFn
                         .apply(this, arg)
                         .then(
                             (result: any) => {
-
+                                executionEnds(target, key, executionStartResult.runId, finalOptions);
                                 return result;
                             },
                             (reason: any) => {
-                                
+                                executionEnds(target, key, executionStartResult.runId, finalOptions);
                                 const shouldSwallow = finalOptions.swallowCancelationException;
                                 const isAsyncCancelation = () => reason 
                                                                 && (reason === cancelationMessage
@@ -171,8 +156,7 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
                                 return Promise.reject(reason);
                             });
 
-            latestTrackAsyncTarget = previousTrackAsyncTarget;
-            latestTrackAsyncMethodName = previousTrackAsyncMethodName;
+            fnObjectOnTarget.currentRunTracker = previousTracker;
 
             return res;
         };
