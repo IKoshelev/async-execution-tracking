@@ -156,7 +156,11 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
                                 return Promise.reject(reason);
                             });
 
-            fnObjectOnTarget.currentRunTracker = previousTracker;
+            if (previousTracker) {
+                fnObjectOnTarget.currentRunTracker = previousTracker;
+            } else {
+                delete fnObjectOnTarget.currentRunTracker;
+            }
 
             return res;
         };
