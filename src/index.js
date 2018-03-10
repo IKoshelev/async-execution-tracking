@@ -12,73 +12,89 @@ exports.defaultTrackAsyncOptions = {
     swallowCancelationException: true,
 };
 var TrackingData = /** @class */ (function () {
-    function TrackingData(target) {
+    function TrackingData() {
         this.lastExecutionStartId = 0;
         this.ongoingExecutionsCount = 0;
         this.isLastStartStillExecuting = false;
-        this.target = target;
     }
     return TrackingData;
 }());
 var globalExecutionStartIdCounter = 1;
-var executionTrackingDict = {};
+var executionTrackingMap = new Map();
 function executionStarts(target, methodName, options) {
-    var allTrackingForMethodName = executionTrackingDict[methodName];
-    if (!allTrackingForMethodName) {
-        allTrackingForMethodName = executionTrackingDict[methodName] = [];
+    var allTrackingForTarget = executionTrackingMap.get(target);
+    if (!allTrackingForTarget) {
+        allTrackingForTarget = new Map();
+        executionTrackingMap.set(target, allTrackingForTarget);
     }
-    var currentTargetAndMethodTracking = allTrackingForMethodName.find(function (x) { return x.target === target; });
-    if (!currentTargetAndMethodTracking) {
-        currentTargetAndMethodTracking = new TrackingData(target);
-        allTrackingForMethodName.push(currentTargetAndMethodTracking);
+    var trackingForMethod = allTrackingForTarget.get(methodName);
+    if (!trackingForMethod) {
+        trackingForMethod = new TrackingData();
+        allTrackingForTarget.set(methodName, trackingForMethod);
     }
-    currentTargetAndMethodTracking.ongoingExecutionsCount += 1;
+    trackingForMethod.ongoingExecutionsCount += 1;
     globalExecutionStartIdCounter += 1;
-    currentTargetAndMethodTracking.lastExecutionStartId = globalExecutionStartIdCounter;
-    currentTargetAndMethodTracking.isLastStartStillExecuting = true;
-    return getRunIdAndTracker(currentTargetAndMethodTracking);
-    function getRunIdAndTracker(trackingData) {
-        var runId = trackingData.lastExecutionStartId;
-        var isRunStillLatest = function () { return trackingData.lastExecutionStartId === runId; };
-        var tracker = {
-            isRunStillLatest: isRunStillLatest,
-            throwIfRunNotLatest: function () {
-                if (isRunStillLatest() === false) {
-                    throw new Error(exports.cancelationMessage);
-                }
-            },
-        };
-        return {
-            runId: runId,
-            tracker: tracker,
-        };
-    }
+    trackingForMethod.lastExecutionStartId = globalExecutionStartIdCounter;
+    trackingForMethod.isLastStartStillExecuting = true;
+    return {
+        runId: trackingForMethod.lastExecutionStartId,
+        trackingData: trackingForMethod,
+    };
 }
 function executionEnds(target, methodName, executionStartId, options) {
-    var allTrackingForMethodName = executionTrackingDict[methodName];
-    if (!allTrackingForMethodName) {
-        throw new Error("Unexpected state: could not get tracking info for method " + methodName);
-    }
-    var currentTargetAndMethodTracking = allTrackingForMethodName.find(function (x) { return x.target === target; });
-    if (!currentTargetAndMethodTracking) {
+    var allTrackingForTarget = executionTrackingMap.get(target);
+    if (!allTrackingForTarget) {
         throw new Error("Unexpected state: could not get tracking info for target instance");
     }
-    currentTargetAndMethodTracking.ongoingExecutionsCount -= 1;
-    if (currentTargetAndMethodTracking.lastExecutionStartId === executionStartId) {
-        currentTargetAndMethodTracking.lastExecutionStartId = 0;
-        currentTargetAndMethodTracking.isLastStartStillExecuting = false;
+    var trackingForMethod = allTrackingForTarget.get(methodName);
+    if (!trackingForMethod) {
+        throw new Error("Unexpected state: could not get tracking info for method " + methodName);
     }
-    if (currentTargetAndMethodTracking.ongoingExecutionsCount === 0) {
-        var arrWithoutCurrTarget = allTrackingForMethodName.splice(allTrackingForMethodName.indexOf(currentTargetAndMethodTracking), 1);
-        if (arrWithoutCurrTarget.length > 0) {
-            executionTrackingDict[methodName] = arrWithoutCurrTarget;
-        }
-        else {
-            delete executionTrackingDict[methodName];
-        }
+    trackingForMethod.ongoingExecutionsCount -= 1;
+    if (trackingForMethod.lastExecutionStartId === executionStartId) {
+        trackingForMethod.lastExecutionStartId = 0;
+        trackingForMethod.isLastStartStillExecuting = false;
+    }
+    if (trackingForMethod.ongoingExecutionsCount === 0) {
+        allTrackingForTarget.delete(methodName);
+    }
+    if (allTrackingForTarget.size === 0) {
+        executionTrackingMap.delete(allTrackingForTarget);
     }
 }
 exports.cancelationMessage = 'Async cancelation thrown.';
+function getCurrentRunTracker(target, methodName) {
+    var warningnMessage = "This indicates a likely mistake, please make sure that a call to getCurrentRunTracker(intance, methodName) " +
+        "is the first line inside the method decorated with trackAsync. At the very least, " +
+        "it should be called before first await or calls to other trackAsync methods.";
+    if (target !== latestTrackAsyncTarget) {
+        throw new Error('Target passed does not match context of currenly starting trackAsyn method' + warningnMessage);
+    }
+    if (methodName !== latestTrackAsyncMethodName) {
+        throw new Error("You are trying to get current run tracker for method " + methodName + " " +
+            ("while currently starting method decorated with trackAsync is " + latestTrackAsyncMethodName + ". ") +
+            warningnMessage);
+    }
+    if (!latestTracking) {
+        throw new Error('Unexpected error, latest tracking is not available');
+    }
+    var tracking = latestTracking;
+    var latestStartIdDuringTrackerCreation = tracking.lastExecutionStartId;
+    var isRunStillLatest = function () { return tracking.lastExecutionStartId === latestStartIdDuringTrackerCreation; };
+    return {
+        isRunStillLatest: isRunStillLatest,
+        throwIfRunNotLatest: function () {
+            if (isRunStillLatest() === false) {
+                throw new Error(exports.cancelationMessage);
+            }
+        },
+    };
+}
+exports.getCurrentRunTracker = getCurrentRunTracker;
+var latestTrackAsyncTarget;
+var latestTrackAsyncMethodName;
+var latestTracking;
+// tslint:disable-next-line:no-shadowed-variable
 function trackAsync(options) {
     var finalOptions = __assign({}, exports.defaultTrackAsyncOptions, options);
     return function (target, key, descriptor) {
@@ -88,17 +104,17 @@ function trackAsync(options) {
         }
         descriptor.value = function () {
             var arg = arguments;
-            var fnObjectOnTarget = this[key];
-            var previousTracker = fnObjectOnTarget.currentRunTracker;
-            var executionStartResult = executionStarts(this, key, finalOptions);
-            fnObjectOnTarget.currentRunTracker = executionStartResult.tracker;
-            var res = originalFn
+            var startResult = executionStarts(target, key, finalOptions);
+            latestTrackAsyncTarget = this;
+            latestTrackAsyncMethodName = key;
+            latestTracking = startResult.trackingData;
+            var res1 = originalFn
                 .apply(this, arg)
                 .then(function (result) {
-                executionEnds(target, key, executionStartResult.runId, finalOptions);
+                executionEnds(target, key, startResult.runId, finalOptions);
                 return result;
             }, function (reason) {
-                executionEnds(target, key, executionStartResult.runId, finalOptions);
+                executionEnds(target, key, startResult.runId, finalOptions);
                 var shouldSwallow = finalOptions.swallowCancelationException;
                 var isAsyncCancelation = function () { return reason
                     && (reason === exports.cancelationMessage
@@ -108,15 +124,12 @@ function trackAsync(options) {
                 }
                 return Promise.reject(reason);
             });
-            if (previousTracker) {
-                fnObjectOnTarget.currentRunTracker = previousTracker;
-            }
-            else {
-                delete fnObjectOnTarget.currentRunTracker;
-            }
-            return res;
+            latestTrackAsyncTarget = undefined;
+            latestTrackAsyncMethodName = undefined;
+            latestTracking = undefined;
+            return res1;
         };
     };
 }
 exports.trackAsync = trackAsync;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7O0FBVWEsUUFBQSx3QkFBd0IsR0FBdUI7SUFDeEQsMkJBQTJCLEVBQUUsSUFBSTtDQUNwQyxDQUFDO0FBRUY7SUFLSSxzQkFBWSxNQUFXO1FBSGhCLHlCQUFvQixHQUFXLENBQUMsQ0FBQztRQUNqQywyQkFBc0IsR0FBVyxDQUFDLENBQUM7UUFDbkMsOEJBQXlCLEdBQVksS0FBSyxDQUFDO1FBRTlDLElBQUksQ0FBQyxNQUFNLEdBQUcsTUFBTSxDQUFDO0lBQ3pCLENBQUM7SUFDTCxtQkFBQztBQUFELENBQUMsQUFSRCxJQVFDO0FBRUQsSUFBSSw2QkFBNkIsR0FBRyxDQUFDLENBQUM7QUFFdEMsSUFBTSxxQkFBcUIsR0FBNkMsRUFBRSxDQUFDO0FBTzNFLHlCQUF5QixNQUFXLEVBQUUsVUFBa0IsRUFBRSxPQUEyQjtJQUNqRixJQUFJLHdCQUF3QixHQUFHLHFCQUFxQixDQUFDLFVBQVUsQ0FBQyxDQUFDO0lBRWpFLEVBQUUsQ0FBQyxDQUFDLENBQUMsd0JBQXdCLENBQUMsQ0FBQyxDQUFDO1FBQzVCLHdCQUF3QixHQUFJLHFCQUFxQixDQUFDLFVBQVUsQ0FBQyxHQUFHLEVBQUUsQ0FBQztJQUN2RSxDQUFDO0lBRUQsSUFBSSw4QkFBOEIsR0FBRyx3QkFBd0IsQ0FBQyxJQUFJLENBQUMsVUFBQyxDQUFDLElBQUssT0FBQSxDQUFDLENBQUMsTUFBTSxLQUFLLE1BQU0sRUFBbkIsQ0FBbUIsQ0FBQyxDQUFDO0lBRS9GLEVBQUUsQ0FBQyxDQUFDLENBQUMsOEJBQThCLENBQUMsQ0FBQyxDQUFDO1FBQ2xDLDhCQUE4QixHQUFHLElBQUksWUFBWSxDQUFDLE1BQU0sQ0FBQyxDQUFDO1FBQzFELHdCQUF3QixDQUFDLElBQUksQ0FBQyw4QkFBOEIsQ0FBQyxDQUFDO0lBQ2xFLENBQUM7SUFFRCw4QkFBOEIsQ0FBQyxzQkFBc0Is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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7O0FBSWEsUUFBQSx3QkFBd0IsR0FBdUI7SUFDeEQsMkJBQTJCLEVBQUUsSUFBSTtDQUNwQyxDQUFDO0FBRUY7SUFBQTtRQUNXLHlCQUFvQixHQUFXLENBQUMsQ0FBQztRQUNqQywyQkFBc0IsR0FBVyxDQUFDLENBQUM7UUFDbkMsOEJBQXlCLEdBQVksS0FBSyxDQUFDO0lBQ3RELENBQUM7SUFBRCxtQkFBQztBQUFELENBQUMsQUFKRCxJQUlDO0FBRUQsSUFBSSw2QkFBNkIsR0FBRyxDQUFDLENBQUM7QUFFdEMsSUFBTSxvQkFBb0IsR0FBRyxJQUFJLEdBQUcsRUFBcUMsQ0FBQztBQU8xRSx5QkFBeUIsTUFBVyxFQUFFLFVBQWtCLEVBQUUsT0FBMkI7SUFFakYsSUFBSSxvQkFBb0IsR0FBRyxvQkFBb0IsQ0FBQyxHQUFHLENBQUMsTUFBTSxDQUFDLENBQUM7SUFFNUQsRUFBRSxDQUFDLENBQUMsQ0FBQyxvQkFBb0IsQ0FBQyxDQUFDLENBQUM7UUFDeEIsb0JBQW9CLEdBQUcsSUFBSSxHQUFHLEVBQXdCLENBQUM7UUFDdkQsb0JBQW9CLENBQUMsR0FBRyxDQUFDLE1BQU0sRUFBRSxvQkFBb0IsQ0FBQyxDQUFDO0lBQzNELENBQUM7SUFFRCxJQUFJLGlCQUFpQixHQUFHLG9CQUFvQixDQUFDLEdBQUcsQ0FBQyxVQUFVLENBQUMsQ0FBQztJQUU3RCxFQUFFLENBQUMsQ0FBQyxDQUFDLGlCQUFpQixDQUFDLENBQUMsQ0FBQztRQUNyQixpQkFBaUIsR0FBSSxJQUFJLFlBQVksRUFBRSxDQUFDO1FBQ3hDLG9CQUFvQixDQUFDLEdBQUcsQ0FBQyxVQUFVLEVBQUUsaUJBQWlCLENBQUMsQ0FBQztJQUM1RCxDQUFDO0lBRUQsaUJBQWlCLENBQUMsc0JBQXNCLElBQUksQ0FBQyxDQUFDO0lBRTlDLDZCQUE2QixJQUFJLENBQUMsQ0FB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
