@@ -4,15 +4,17 @@
   "description": "Decorators for keeping track of async functione execution",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha -w",
     "lint": "tslint \" src/**/*.ts*\""
   },
   "author": "Ivan Koshelev",
   "license": "MIT",
-  "dependencies": {
+  "dependencies": {   
     "reflect-metadata": "^0.1.12"
   },
   "devDependencies": {
+    "chai": "^4.1.2",
+    "@types/chai": "^4.1.2",
     "@types/mocha": "^2.2.48",
     "es6-promise": "^4.2.4",
     "mocha": "^5.0.4",

@@ -90,6 +90,10 @@ export function getCurrentRunTracker<T>(target: T, methodName: keyof T) {
     `is the first line inside the method decorated with trackAsync. At the very least, ` + 
     `it should be called before first await or calls to other trackAsync methods.`;
 
+    if (latestTrackAsyncTarget === undefined && latestTrackAsyncMethodName === undefined) {
+        throw new Error('You are trying to get current run tracker while no run is starting' + warningnMessage );
+    }
+
     if (target !== latestTrackAsyncTarget) {
         throw new Error('Target passed does not match context of currenly starting trackAsyn method' + warningnMessage );
     }
@@ -129,7 +133,7 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
 
     const finalOptions = { ...defaultTrackAsyncOptions, ...options };
 
-    return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<Function>) {
+    return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<() => Promise<any>>) {
         const originalFn = descriptor.value;
 
         if (typeof originalFn !== 'function') {
@@ -171,7 +175,6 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
             latestTracking = undefined;
 
             return res1; 
-
         };
     };
 }

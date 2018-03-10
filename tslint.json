@@ -12,7 +12,9 @@
         "only-arrow-functions": false,
         "no-empty-interface": false,
         "no-trailing-whitespace": false,
-        "variable-name": false
+        "variable-name": false,
+        "ordered-imports": false,
+        "eofline": true,
     },
     "rulesDirectory": []
 }
