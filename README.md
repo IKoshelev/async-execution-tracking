@@ -47,7 +47,7 @@ import { trackAsync, getCurrentRunTracker } from 'async-execution-tracking';
 ### tracking presence of outgoing async calls
 In UI you often need to disable certian buttons or the whole screen while there is an outgoing request. 
 ```javascript
-import { trackAsync, getCurrentRunTracker, ITrackAsyncOptions } from 'async-execution-tracking';
+import { trackAsync, getCurrentRunTracker } from 'async-execution-tracking';
 
  const decoratorOptions {
         onExecutionStart(target, methodName, newRunningExecutionsCount){
