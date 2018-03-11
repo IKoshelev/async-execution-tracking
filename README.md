@@ -39,8 +39,6 @@ import { trackAsync, getCurrentRunTracker } from 'async-execution-tracking';
           // (to avoid overriding previous result if a request just lagged)
           asyncRunTracker.throwCancelationIfRunNotLatest();
 
-
-
           return result;
       }
 }
