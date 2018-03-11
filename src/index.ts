@@ -1,9 +1,13 @@
-export interface ITrackAsyncOptions {
+export interface ITrackAsyncOptions<T = any> {
     swallowCancelationException: boolean;
+    onExecutionStart (target: T, methodName: keyof T, newRunningExecutionsCount: number): void;
+    onExecutionEnd (target: T, methodName: keyof T, newRunningExecutionsCount: number, targetHasAnyExecutionsRunning: boolean): void;  
 }
 
 export const defaultTrackAsyncOptions: ITrackAsyncOptions = {
     swallowCancelationException: true,
+    onExecutionStart: () => {},
+    onExecutionEnd: () => {},
 };
 
 class TrackingData {
@@ -45,6 +49,8 @@ function executionStarts(target: any, methodName: string, options: ITrackAsyncOp
 
     trackingForMethod.isLastStartStillExecuting = true;
 
+    options.onExecutionStart(target, methodName, trackingForMethod.ongoingExecutionsCount);
+
     return  {
         runId: trackingForMethod.lastExecutionStartId ,
         trackingData: trackingForMethod ,
@@ -76,9 +82,13 @@ function executionEnds(target: any, methodName: string, executionStartId: number
         allTrackingForTarget.delete(methodName);
     }
 
+    let targetHasMoreExecutionsRunning = true;
     if (allTrackingForTarget.size === 0) {
         executionTrackingMap.delete(allTrackingForTarget);
+        targetHasMoreExecutionsRunning = false;
     }
+
+    options.onExecutionEnd(target, methodName, trackingForMethod.ongoingExecutionsCount, targetHasMoreExecutionsRunning);
 }
 
 export const cancelationMessage = 'Async cancelation thrown.';
@@ -135,7 +145,7 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
 
     const finalOptions = { ...defaultTrackAsyncOptions, ...options };
 
-    return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<() => Promise<any>>) {
+    return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<(...args: any[]) => Promise<any>>) {
         const originalFn = descriptor.value;
 
         if (typeof originalFn !== 'function') {
@@ -145,7 +155,9 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
         descriptor.value = function() {
             const arg = arguments;
 
-            const startResult = executionStarts(target, key, finalOptions);
+            const currentTarget = this;
+
+            const startResult = executionStarts(currentTarget, key, finalOptions);
 
             latestTrackAsyncTarget = this;
             latestTrackAsyncMethodName = key;
@@ -155,11 +167,11 @@ export function trackAsync(options?: Partial<ITrackAsyncOptions>) {
                         .apply(this, arg)
                         .then(
                             (result: any) => {
-                                executionEnds(target, key, startResult.runId, finalOptions);
+                                executionEnds(currentTarget, key, startResult.runId, finalOptions);
                                 return result;
                             },
                             (reason: any) => {
-                                executionEnds(target, key, startResult.runId, finalOptions);
+                                executionEnds(currentTarget, key, startResult.runId, finalOptions);
                                 const shouldSwallow = finalOptions.swallowCancelationException;
                                 const isAsyncCancelation = () => reason 
                                                                 && (reason === cancelationMessage

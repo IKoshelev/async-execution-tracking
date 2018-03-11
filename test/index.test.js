@@ -52,59 +52,59 @@ var expectNotToGetToThisLine = function () { return chai_1.expect.fail('Executio
     'one of the previous statements should have thrown an exception.'); };
 var normalReturnA = 5;
 var normalReturnB = 7;
-var TestSubject = /** @class */ (function () {
-    function TestSubject() {
-    }
-    TestSubject.prototype.methodCancelsNonLatestAndSwallowsError = function (finalAction) {
-        return __awaiter(this, void 0, void 0, function () {
-            var asyncRunTracker;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        asyncRunTracker = index_1.getCurrentRunTracker(this, 'methodCancelsNonLatestAndSwallowsError');
-                        return [4 /*yield*/, delay(25)];
-                    case 1:
-                        _a.sent();
-                        asyncRunTracker.throwIfRunNotLatest();
-                        finalAction && finalAction();
-                        return [2 /*return*/, normalReturnA];
-                }
-            });
-        });
-    };
-    TestSubject.prototype.methodCancelsNonLatestAndDoesNotSwallowsError = function (finalAction) {
-        return __awaiter(this, void 0, void 0, function () {
-            var asyncRunTracker;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        asyncRunTracker = index_1.getCurrentRunTracker(this, 'methodCancelsNonLatestAndDoesNotSwallowsError');
-                        return [4 /*yield*/, delay(25)];
-                    case 1:
-                        _a.sent();
-                        asyncRunTracker.throwIfRunNotLatest();
-                        finalAction && finalAction();
-                        return [2 /*return*/, normalReturnB];
-                }
-            });
-        });
-    };
-    __decorate([
-        index_1.trackAsync(),
-        __metadata("design:type", Function),
-        __metadata("design:paramtypes", [Function]),
-        __metadata("design:returntype", Promise)
-    ], TestSubject.prototype, "methodCancelsNonLatestAndSwallowsError", null);
-    __decorate([
-        index_1.trackAsync({ swallowCancelationException: false }),
-        __metadata("design:type", Function),
-        __metadata("design:paramtypes", [Function]),
-        __metadata("design:returntype", Promise)
-    ], TestSubject.prototype, "methodCancelsNonLatestAndDoesNotSwallowsError", null);
-    return TestSubject;
-}());
 describe('For @trackAsync decorated methods ', function () {
     describe(' every new execution is tracked and it ', function () {
+        var TestSubject = /** @class */ (function () {
+            function TestSubject() {
+            }
+            TestSubject.prototype.methodCancelsNonLatestAndSwallowsError = function (finalAction) {
+                return __awaiter(this, void 0, void 0, function () {
+                    var asyncRunTracker;
+                    return __generator(this, function (_a) {
+                        switch (_a.label) {
+                            case 0:
+                                asyncRunTracker = index_1.getCurrentRunTracker(this, 'methodCancelsNonLatestAndSwallowsError');
+                                return [4 /*yield*/, delay(25)];
+                            case 1:
+                                _a.sent();
+                                asyncRunTracker.throwIfRunNotLatest();
+                                finalAction && finalAction();
+                                return [2 /*return*/, normalReturnA];
+                        }
+                    });
+                });
+            };
+            TestSubject.prototype.methodCancelsNonLatestAndDoesNotSwallowsError = function (finalAction) {
+                return __awaiter(this, void 0, void 0, function () {
+                    var asyncRunTracker;
+                    return __generator(this, function (_a) {
+                        switch (_a.label) {
+                            case 0:
+                                asyncRunTracker = index_1.getCurrentRunTracker(this, 'methodCancelsNonLatestAndDoesNotSwallowsError');
+                                return [4 /*yield*/, delay(25)];
+                            case 1:
+                                _a.sent();
+                                asyncRunTracker.throwIfRunNotLatest();
+                                finalAction && finalAction();
+                                return [2 /*return*/, normalReturnB];
+                        }
+                    });
+                });
+            };
+            __decorate([
+                index_1.trackAsync(),
+                __metadata("design:type", Function),
+                __metadata("design:paramtypes", [Function]),
+                __metadata("design:returntype", Promise)
+            ], TestSubject.prototype, "methodCancelsNonLatestAndSwallowsError", null);
+            __decorate([
+                index_1.trackAsync({ swallowCancelationException: false }),
+                __metadata("design:type", Function),
+                __metadata("design:paramtypes", [Function]),
+                __metadata("design:returntype", Promise)
+            ], TestSubject.prototype, "methodCancelsNonLatestAndDoesNotSwallowsError", null);
+            return TestSubject;
+        }());
         var subject = new TestSubject();
         afterEach(function () {
             subject = new TestSubject();
@@ -160,7 +160,7 @@ describe('For @trackAsync decorated methods ', function () {
                 }
             });
         }); });
-        it('same methods on different instances don\'t interfiere with each othe', function () { return __awaiter(_this, void 0, void 0, function () {
+        it('same methods on different instances don\'t interfiere with each other', function () { return __awaiter(_this, void 0, void 0, function () {
             var counter, p1, p2, _a, res1, res2;
             return __generator(this, function (_b) {
                 switch (_b.label) {
@@ -171,9 +171,9 @@ describe('For @trackAsync decorated methods ', function () {
                         return [4 /*yield*/, Promise.all([p1, p2])];
                     case 1:
                         _a = _b.sent(), res1 = _a[0], res2 = _a[1];
-                        chai_1.expect(res1).to.equal(undefined);
+                        chai_1.expect(res1).to.equal(normalReturnA);
                         chai_1.expect(res2).to.equal(normalReturnA);
-                        chai_1.expect(counter).to.equal(1);
+                        chai_1.expect(counter).to.equal(2);
                         return [2 /*return*/];
                 }
             });
@@ -320,5 +320,127 @@ describe('For @trackAsync decorated methods ', function () {
             });
         }); });
     });
+    describe(' you can pass hooks to check overall asycn execution state of a given target and ', function () {
+        var decoratorOptions = {
+            onExecutionStart: function (target, methodName, newRunningExecutionsCount) {
+                target.activityLog.push([methodName, newRunningExecutionsCount]);
+                target.isBusy = true;
+            },
+            onExecutionEnd: function (target, methodName, newRunningExecutionsCount, targetHasAnyExecutionsRunning) {
+                target.activityLog.push([methodName, newRunningExecutionsCount]);
+                target.isBusy = targetHasAnyExecutionsRunning;
+            }
+        };
+        var TestSubject = /** @class */ (function () {
+            function TestSubject() {
+                this.isBusy = false;
+                this.activityLog = [];
+            }
+            TestSubject.prototype.methodA = function (promise) {
+                return __awaiter(this, void 0, void 0, function () {
+                    return __generator(this, function (_a) {
+                        switch (_a.label) {
+                            case 0: return [4 /*yield*/, promise];
+                            case 1:
+                                _a.sent();
+                                return [2 /*return*/, normalReturnA];
+                        }
+                    });
+                });
+            };
+            TestSubject.prototype.methodB = function (promise) {
+                return __awaiter(this, void 0, void 0, function () {
+                    return __generator(this, function (_a) {
+                        switch (_a.label) {
+                            case 0: return [4 /*yield*/, promise];
+                            case 1:
+                                _a.sent();
+                                return [2 /*return*/, normalReturnA];
+                        }
+                    });
+                });
+            };
+            __decorate([
+                index_1.trackAsync(decoratorOptions),
+                __metadata("design:type", Function),
+                __metadata("design:paramtypes", [Promise]),
+                __metadata("design:returntype", Promise)
+            ], TestSubject.prototype, "methodA", null);
+            __decorate([
+                index_1.trackAsync(decoratorOptions),
+                __metadata("design:type", Function),
+                __metadata("design:paramtypes", [Promise]),
+                __metadata("design:returntype", Promise)
+            ], TestSubject.prototype, "methodB", null);
+            return TestSubject;
+        }());
+        var subject = new TestSubject();
+        afterEach(function () {
+            subject = new TestSubject();
+        });
+        it('hooks will receive status update on every async start and finish', function () { return __awaiter(_this, void 0, void 0, function () {
+            function expectLastActivity(methodName, executionCount) {
+                var lastActivity = subject.activityLog[subject.activityLog.length - 1];
+                chai_1.expect(lastActivity[0]).to.equal(methodName);
+                chai_1.expect(lastActivity[1]).to.equal(executionCount);
+            }
+            var resolves, promises, _i, _a, _, differentUninterfieringSubject;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        resolves = [];
+                        promises = [];
+                        for (_i = 0, _a = new Array(5); _i < _a.length; _i++) {
+                            _ = _a[_i];
+                            promises.push(new Promise(function (resolve) {
+                                resolves.push(resolve);
+                            }));
+                        }
+                        differentUninterfieringSubject = new TestSubject();
+                        chai_1.expect(differentUninterfieringSubject.isBusy).to.equal(false);
+                        differentUninterfieringSubject.methodA(promises[3]);
+                        differentUninterfieringSubject.methodB(promises[4]);
+                        chai_1.expect(differentUninterfieringSubject.isBusy).to.equal(true);
+                        chai_1.expect(subject.isBusy).to.equal(false);
+                        subject.methodA(promises[0]);
+                        expectLastActivity('methodA', 1);
+                        chai_1.expect(subject.isBusy).to.equal(true);
+                        subject.methodA(promises[1]);
+                        expectLastActivity('methodA', 2);
+                        chai_1.expect(subject.isBusy).to.equal(true);
+                        subject.methodB(promises[2]);
+                        expectLastActivity('methodB', 1);
+                        chai_1.expect(subject.isBusy).to.equal(true);
+                        resolves[0]();
+                        return [4 /*yield*/, delay(1)];
+                    case 1:
+                        _b.sent();
+                        expectLastActivity('methodA', 1);
+                        chai_1.expect(subject.isBusy).to.equal(true);
+                        resolves[1]();
+                        return [4 /*yield*/, delay(1)];
+                    case 2:
+                        _b.sent();
+                        expectLastActivity('methodA', 0);
+                        chai_1.expect(subject.isBusy).to.equal(true);
+                        resolves[2]();
+                        return [4 /*yield*/, delay(1)];
+                    case 3:
+                        _b.sent();
+                        expectLastActivity('methodB', 0);
+                        chai_1.expect(subject.isBusy).to.equal(false);
+                        chai_1.expect(differentUninterfieringSubject.isBusy).to.equal(true);
+                        resolves[3]();
+                        resolves[4]();
+                        return [4 /*yield*/, delay(1)];
+                    case 4:
+                        _b.sent();
+                        chai_1.expect(differentUninterfieringSubject.isBusy).to.equal(false);
+                        chai_1.expect(differentUninterfieringSubject.activityLog.length).to.equal(4);
+                        return [2 /*return*/];
+                }
+            });
+        }); });
+    });
 });
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXgudGVzdC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImluZGV4LnRlc3QudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsaUJBOExHOztBQTdMSCw2QkFBOEI7QUFFOUIsd0NBQWtFO0FBS2xFLElBQU0sS0FBSyxHQUFHLFVBQUMsRUFBVSxJQUFLLE9BQUEsSUFBSSxPQUFPLENBQUMsVUFBQyxPQUFPLElBQUssT0FBQSxVQUFVLENBQUMsT0FBTyxFQUFFLEVBQUUsQ0FBQyxFQUF2QixDQUF1QixDQUFDLEVBQWpELENBQWlELENBQUM7QUFFaEYsSUFBTSx3QkFBd0IsR0FBRyxjQUFNLE9BQUEsYUFBTSxDQUFDLElBQUksQ0FBQyx5Q0FBeUM7SUFDeEMsaUVBQWlFLENBQUMsRUFEL0UsQ0FDK0UsQ0FBQztBQUN2SCxJQUFNLGFBQWEsR0FBRyxDQUFDLENBQUM7QUFDeEIsSUFBTSxhQUFhLEdBQUcsQ0FBQyxDQUFDO0FBRXhCO0lBQUE7SUEyQkEsQ0FBQztJQXhCUyw0REFBc0MsR0FBNUMsVUFBNkMsV0FBc0I7Ozs7Ozt3QkFDekQsZUFBZSxHQUFHLDRCQUFvQixDQUFDLElBQUksRUFBRSx3Q0FBd0MsQ0FBQyxDQUFDO3dCQUU3RixxQkFBTSxLQUFLLENBQUUsRUFBRSxDQUFDLEVBQUE7O3dCQUFoQixTQUFnQixDQUFDO3dCQUVqQixlQUFlLENBQUMsbUJBQW1CLEVBQUUsQ0FBQzt3QkFFdEMsV0FBVyxJQUFJLFdBQVcsRUFBRSxDQUFDO3dCQUU3QixzQkFBTyxhQUFhLEVBQUM7Ozs7S0FDeEI7SUFHSyxtRUFBNkMsR0FBbkQsVUFBb0QsV0FBc0I7Ozs7Ozt3QkFDaEUsZUFBZSxHQUFHLDRCQUFvQixDQUFDLElBQUksRUFBRSwrQ0FBK0MsQ0FBQyxDQUFDO3dCQUVwRyxxQkFBTSxLQUFLLENBQUUsRUFBRSxDQUFDLEVBQUE7O3dCQUFoQixTQUFnQixDQUFD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
+//# sourceMappingURL=index.test.js.map

@@ -1,7 +1,7 @@
 import * as mocha from 'mocha';
 import { expect } from 'chai';
 
-import { trackAsync, getCurrentRunTracker } from './../src/index';
+import { trackAsync, getCurrentRunTracker, ITrackAsyncOptions } from './../src/index';
 
 //todo typescript couldn't find setTimeout?
 declare function setTimeout(a:any, b:any ):void;
@@ -13,38 +13,39 @@ const expectNotToGetToThisLine = () => expect.fail('Execution should not get to 
 const normalReturnA = 5;
 const normalReturnB = 7;
 
-class TestSubject{
-
-    @trackAsync()
-    async methodCancelsNonLatestAndSwallowsError(finalAction?: () => {}){
-        const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndSwallowsError');
-
-        await delay (25); 
-
-        asyncRunTracker.throwIfRunNotLatest();
-
-        finalAction && finalAction();
-        
-        return normalReturnA;
-    }
-
-    @trackAsync({swallowCancelationException: false})
-    async methodCancelsNonLatestAndDoesNotSwallowsError(finalAction?: () => {}){
-        const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndDoesNotSwallowsError');
-
-        await delay (25); 
-
-        asyncRunTracker.throwIfRunNotLatest();
-
-        finalAction && finalAction();
-        
-        return normalReturnB;
-    }
-}
 
 describe('For @trackAsync decorated methods ', () => {
 
     describe(' every new execution is tracked and it ', () => {
+
+        class TestSubject{
+
+            @trackAsync()
+            async methodCancelsNonLatestAndSwallowsError(finalAction?: () => {}){
+                const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndSwallowsError');
+        
+                await delay (25); 
+        
+                asyncRunTracker.throwIfRunNotLatest();
+        
+                finalAction && finalAction();
+                
+                return normalReturnA;
+            }
+        
+            @trackAsync({swallowCancelationException: false})
+            async methodCancelsNonLatestAndDoesNotSwallowsError(finalAction?: () => {}){
+                const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndDoesNotSwallowsError');
+        
+                await delay (25); 
+        
+                asyncRunTracker.throwIfRunNotLatest();
+        
+                finalAction && finalAction();
+                
+                return normalReturnB;
+            }
+        }
 
         let subject: TestSubject = new TestSubject();
 
@@ -94,7 +95,7 @@ describe('For @trackAsync decorated methods ', () => {
             expect(counter).to.equal(2);
         });
 
-        it('same methods on different instances don\'t interfiere with each othe', async ()=> {
+        it('same methods on different instances don\'t interfiere with each other', async ()=> {
 
             let counter = 0;
 
@@ -104,10 +105,10 @@ describe('For @trackAsync decorated methods ', () => {
 
             const [res1, res2] = await Promise.all([p1,p2]);
 
-            expect(res1).to.equal(undefined);
+            expect(res1).to.equal(normalReturnA);
             expect(res2).to.equal(normalReturnA);
             
-            expect(counter).to.equal(1);
+            expect(counter).to.equal(2);
         });
         
         it('can be configured not to swallow cancelation exception', async ()=> {
@@ -188,4 +189,114 @@ describe('For @trackAsync decorated methods ', () => {
             }
         });
     }); 
+
+    describe(' you can pass hooks to check overall asycn execution state of a given target and ', () => {
+
+        const decoratorOptions: Partial<ITrackAsyncOptions> = {
+            onExecutionStart(target:TestSubject, methodName: keyof TestSubject, newRunningExecutionsCount: number){
+                target.activityLog.push([methodName,newRunningExecutionsCount]);
+                target.isBusy = true;
+            },
+            onExecutionEnd(target:TestSubject, methodName: keyof TestSubject, newRunningExecutionsCount: number, targetHasAnyExecutionsRunning: boolean){
+                target.activityLog.push([methodName,newRunningExecutionsCount]);
+                target.isBusy = targetHasAnyExecutionsRunning;
+            }
+        }
+
+        class TestSubject{
+
+            public isBusy: boolean = false; 
+            public activityLog: [string,number][] = [];
+
+            @trackAsync(decoratorOptions)
+            async methodA(promise: Promise<any>){
+
+                await promise;
+
+                return normalReturnA;
+            }
+
+            @trackAsync(decoratorOptions)
+            async methodB(promise: Promise<any>){
+
+                await promise;
+
+                return normalReturnA;
+            }
+        }
+
+        let subject: TestSubject = new TestSubject();
+
+        afterEach(() => {
+            subject = new TestSubject();
+        })
+
+        it('hooks will receive status update on every async start and finish', async ()=> {
+
+            const resolves: (()=>void)[] = [];
+            const promises: Promise<any>[] = [];
+
+            for(let _ of new Array(5)) {
+                promises.push(new Promise((resolve) => { 
+                    resolves.push(resolve);
+                }));
+            }
+
+            function expectLastActivity(methodName: keyof TestSubject, executionCount: number) {
+                const lastActivity = subject.activityLog[subject.activityLog.length - 1];
+                expect(lastActivity[0]).to.equal(methodName);
+                expect(lastActivity[1]).to.equal(executionCount);
+            }
+
+            let differentUninterfieringSubject = new TestSubject();
+
+            expect(differentUninterfieringSubject.isBusy).to.equal(false);
+
+            differentUninterfieringSubject.methodA(promises[3]);
+            differentUninterfieringSubject.methodB(promises[4]);
+            
+            expect(differentUninterfieringSubject.isBusy).to.equal(true);
+
+            expect(subject.isBusy).to.equal(false);
+
+            subject.methodA(promises[0]);
+
+            expectLastActivity('methodA', 1);
+            expect(subject.isBusy).to.equal(true);
+
+            subject.methodA(promises[1]);
+
+            expectLastActivity('methodA', 2);
+            expect(subject.isBusy).to.equal(true);
+            
+            subject.methodB(promises[2]);
+
+            expectLastActivity('methodB', 1);
+            expect(subject.isBusy).to.equal(true);
+
+            resolves[0]();
+            await delay(1);
+            expectLastActivity('methodA', 1);
+            expect(subject.isBusy).to.equal(true);
+
+            resolves[1]();
+            await delay(1);
+            expectLastActivity('methodA', 0);
+            expect(subject.isBusy).to.equal(true);
+
+            resolves[2]();
+            await delay(1);
+            expectLastActivity('methodB', 0);
+            expect(subject.isBusy).to.equal(false);
+
+            expect(differentUninterfieringSubject.isBusy).to.equal(true);
+            resolves[3]();
+            resolves[4]();
+            await delay(1);
+            expect(differentUninterfieringSubject.isBusy).to.equal(false);
+            expect(differentUninterfieringSubject.activityLog.length).to.equal(4);
+        });
+
+    });
+
 });
