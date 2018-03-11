@@ -85,3 +85,16 @@ class MyClass{
 //...
 <SomeView disabled={this.props.vm.isBusy}/>
 ```
+
+## compatibility
+Transpiled version will work with ES5 and
+
+Map https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map 
+
+( polyfill https://github.com/eriwen/es6-map-shim )
+
+
+
+Promise https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise 
+
+( polyfill https://github.com/taylorhakes/promise-polyfill )
