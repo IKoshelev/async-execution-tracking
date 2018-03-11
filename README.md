@@ -11,7 +11,7 @@ npm install -save 'async-execution-tracking'
 ### tracking if run still latest
 This library allows you to decorate your async methods, track if current continuation was triggered by the latest run and cancel 
 if run is no longer relevant. Lets say you user is typing into an input with autocomplete options retrieved from the server. 
-You would like to debounce the server call somewhat (to avoid request on every button and only make request once the user stopped
+You would like to debounce the server call somewhat (to avoid request on every keypress and only make request once the user stopped
 typing for half a second). You also only want to show autocomplete options from the latest run, even if a previous request was delayed
 and came back later from the server.
 
