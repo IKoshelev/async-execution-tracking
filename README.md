@@ -39,6 +39,8 @@ import { trackAsync, getCurrentRunTracker } from 'async-execution-tracking';
           // (to avoid overriding previous result if a request just lagged)
           asyncRunTracker.throwCancelationIfRunNotLatest();
 
+
+
           return result;
       }
 }
@@ -98,3 +100,6 @@ Map https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Obj
 Promise https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise 
 
 ( polyfill https://github.com/taylorhakes/promise-polyfill )
+
+
+As such, works in IE11 ( just promise polyfill needed) and all evergreen browsers. With Map polyfill shoould work in up to IE7.
