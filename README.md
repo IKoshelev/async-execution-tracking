@@ -101,3 +101,6 @@ Promise https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global
 
 
 As such, works in IE11 ( just promise polyfill needed) and all evergreen browsers. With Map polyfill shoould work in up to IE7.
+
+## TypeSrcipt and @Types
+Types are provided with the package. Library is developed in TypeScript, src available with the package and on github. 
