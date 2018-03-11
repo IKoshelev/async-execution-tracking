@@ -13,7 +13,6 @@ const expectNotToGetToThisLine = () => expect.fail('Execution should not get to 
 const normalReturnA = 5;
 const normalReturnB = 7;
 
-
 describe('For @trackAsync decorated methods ', () => {
 
     describe(' every new execution is tracked and it ', () => {
@@ -254,7 +253,7 @@ describe('For @trackAsync decorated methods ', () => {
 
             differentUninterfieringSubject.methodA(promises[3]);
             differentUninterfieringSubject.methodB(promises[4]);
-            
+
             expect(differentUninterfieringSubject.isBusy).to.equal(true);
 
             expect(subject.isBusy).to.equal(false);

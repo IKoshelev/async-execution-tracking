@@ -1,14 +1,20 @@
 {
   "name": "async-execution-tracking",
-  "version": "0.0.1",
-  "description": "Decorators for keeping track of async functione execution",
-  "main": "index.js",
+  "version": "0.0.3",
+  "description": "Decorator to track execution of async methods and simplify early cancelation",
+  "main": "./lib/src/index.js",
+  "types": "./lib/src/index.d.ts",
   "scripts": {
-    "test": "mocha -w",
+    "test": "mocha ./lib/test/**/*.js -w",
     "lint": "tslint \" src/**/*.ts*\""
   },
   "author": "Ivan Koshelev",
   "license": "MIT",
+  "repository" :
+  {
+    "type" : "git",
+    "url" : "https://github.com/IKoshelev/async-execution-tracking"
+  },
   "dependencies": {
     "reflect-metadata": "^0.1.12"
   },
