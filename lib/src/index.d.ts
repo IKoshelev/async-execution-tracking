@@ -8,6 +8,6 @@ export declare const cancelationMessage = "Async cancelation thrown.";
 export declare const throwCancelationError: () => never;
 export declare function getCurrentRunTracker<T>(target: T, methodName: keyof T): {
     isRunStillLatest: () => boolean;
-    throwIfRunNotLatest: () => void;
+    throwCancelationIfRunNotLatest: () => void;
 };
 export declare function trackAsync(options?: Partial<ITrackAsyncOptions>): (target: Object, key: string, descriptor: TypedPropertyDescriptor<(...args: any[]) => Promise<any>>) => void;

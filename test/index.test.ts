@@ -25,7 +25,7 @@ describe('For @trackAsync decorated methods ', () => {
         
                 await delay (25); 
         
-                asyncRunTracker.throwIfRunNotLatest();
+                asyncRunTracker.throwCancelationIfRunNotLatest();
         
                 finalAction && finalAction();
                 
@@ -38,7 +38,7 @@ describe('For @trackAsync decorated methods ', () => {
         
                 await delay (25); 
         
-                asyncRunTracker.throwIfRunNotLatest();
+                asyncRunTracker.throwCancelationIfRunNotLatest();
         
                 finalAction && finalAction();
                 

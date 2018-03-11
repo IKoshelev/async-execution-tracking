@@ -128,7 +128,7 @@ export function getCurrentRunTracker<T>(target: T, methodName: keyof T) {
 
     return {
         isRunStillLatest,
-        throwIfRunNotLatest: () => {
+        throwCancelationIfRunNotLatest: () => {
             if (isRunStillLatest() === false) {
                 throwCancelationError();
             }
