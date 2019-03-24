@@ -1,12 +1,14 @@
 import * as mocha from 'mocha';
 import { expect } from 'chai';
+import { command } from 'mobx-command';
 
-import { trackAsync, getCurrentRunTracker, ITrackAsyncOptions } from './../src/index';
+import { trackAsync, trackAsyncNested, getCurrentRunTracker, ITrackAsyncOptions } from './../src/index';
+
 
 //todo typescript couldn't find setTimeout?
 declare function setTimeout(a:any, b:any ):void;
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const expectNotToGetToThisLine = () => expect.fail('Execution should not get to this line, '+ 
                                                     'one of the previous statements should have thrown an exception.');
@@ -23,7 +25,7 @@ describe('For @trackAsync decorated methods ', () => {
             async methodCancelsNonLatestAndSwallowsError(finalAction?: () => {}){
                 const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndSwallowsError');
         
-                await delay (25); 
+                await delay(); 
         
                 asyncRunTracker.throwCancelationIfRunNotLatest();
         
@@ -36,8 +38,8 @@ describe('For @trackAsync decorated methods ', () => {
             async methodCancelsNonLatestAndDoesNotSwallowsError(finalAction?: () => {}){
                 const asyncRunTracker = getCurrentRunTracker(this, 'methodCancelsNonLatestAndDoesNotSwallowsError');
         
-                await delay (25); 
-        
+                await delay(); 
+
                 asyncRunTracker.throwCancelationIfRunNotLatest();
         
                 finalAction && finalAction();
@@ -116,9 +118,13 @@ describe('For @trackAsync decorated methods ', () => {
             let cancelationWasNotSallowed = false;
 
             subject.methodCancelsNonLatestAndDoesNotSwallowsError(() => counter += 1)
-                    .catch(() => cancelationWasNotSallowed = true);
+                    .catch(() => {
+                        cancelationWasNotSallowed = true;
+                    });
 
             await subject.methodCancelsNonLatestAndDoesNotSwallowsError(() => counter += 1);
+
+            await delay();
 
             expect(counter).to.equal(1);
             expect(cancelationWasNotSallowed).to.equal(true);
@@ -157,7 +163,7 @@ describe('For @trackAsync decorated methods ', () => {
 
                 @trackAsync()
                 async retrievedTooLate(){
-                    await delay(25);
+                    await delay();
                     getCurrentRunTracker(new Subject(), 'retrievedTooLate');
                 }
 
@@ -298,4 +304,189 @@ describe('For @trackAsync decorated methods ', () => {
 
     });
 
+});
+
+describe('@trackAsyncNested can track methods on objects like command.execute', () => {
+
+    const noop = () => {};
+
+    class TestSubject{
+
+        @trackAsyncNested({ property: 'execute' })
+        commandCancelsNonLatestAndSwallowsError = command(async(finalAction?: () => {}) => {
+            const asyncRunTracker = getCurrentRunTracker(this, 'commandCancelsNonLatestAndSwallowsError');
+    
+            await delay(); 
+    
+            asyncRunTracker.throwCancelationIfRunNotLatest();   
+            
+            finalAction && finalAction();
+            
+            return normalReturnA;
+        });
+
+        @trackAsyncNested({ property: 'execute', swallowCancelationException: false})
+        commandCancelsNonLatestAndDoesNotSwallowsError = command(async(finalAction?: () => {}) => {
+            const asyncRunTracker = getCurrentRunTracker(this, 'commandCancelsNonLatestAndDoesNotSwallowsError');
+    
+            await delay(); 
+
+            asyncRunTracker.throwCancelationIfRunNotLatest();
+    
+            finalAction && finalAction();
+            
+            return normalReturnB;
+        });
+    }
+
+    let subject: TestSubject = new TestSubject();
+
+    beforeEach(() => {
+        process.on('unhandledRejection', noop);
+    });
+
+    afterEach(() => {
+        subject = new TestSubject();
+        process.removeListener('unhandledRejection', noop);
+    })
+
+    it('will run to completion normally', async ()=> {
+
+        let finished = false;
+
+        const res = await subject.commandCancelsNonLatestAndSwallowsError.execute(() => finished = true);
+
+        expect(finished).to.equal(true);
+        expect(res).to.equal(normalReturnA);
+    });
+
+    it('allows tracking and cancelation if same method was run again on the instance', async ()=> {
+
+        let counter = 0;
+
+        const p1 = subject.commandCancelsNonLatestAndSwallowsError.execute(() => counter += 1);
+
+        const p2 = subject.commandCancelsNonLatestAndSwallowsError.execute(() => counter += 1);
+
+        const [res1, res2] = await Promise.all([p1,p2]);
+
+        expect(res1).to.equal(undefined);
+        expect(res2).to.equal(normalReturnA);
+        
+        expect(counter).to.equal(1);
+    });
+
+    it('different methods on same instance don\'t interfiere with each other' , async ()=> {
+
+        let counter = 0;
+
+        const p1 = subject.commandCancelsNonLatestAndSwallowsError.execute(() => counter += 1);
+
+        const p2 = subject.commandCancelsNonLatestAndDoesNotSwallowsError.execute(() => counter += 1);
+
+        const [res1, res2] = await Promise.all([p1,p2]);
+
+        expect(res1).to.equal(normalReturnA);
+        expect(res2).to.equal(normalReturnB);
+        
+        expect(counter).to.equal(2);
+    });
+
+    it('same methods on different instances don\'t interfiere with each other', async ()=> {
+
+        let counter = 0;
+
+        const p1 = subject.commandCancelsNonLatestAndSwallowsError.execute(() => counter += 1);
+
+        const p2 = new TestSubject().commandCancelsNonLatestAndSwallowsError.execute(() => counter += 1);
+
+        const [res1, res2] = await Promise.all([p1,p2]);
+
+        expect(res1).to.equal(normalReturnA);
+        expect(res2).to.equal(normalReturnA);
+        
+        expect(counter).to.equal(2);
+    });
+    
+    it('can be configured not to swallow cancelation exception', async ()=> {
+
+        let counter = 0;
+        let cancelationWasNotSallowed = false;
+
+        subject.commandCancelsNonLatestAndDoesNotSwallowsError.execute(() => counter += 1)
+                .catch(() => {
+                    cancelationWasNotSallowed = true;
+                });
+
+        await subject.commandCancelsNonLatestAndDoesNotSwallowsError.execute(() => counter += 1);
+
+        await delay();
+
+        expect(counter).to.equal(1);
+        expect(cancelationWasNotSallowed).to.equal(true);
+    });
+
+    it('does not swallow non-cancelation exceptions', async ()=> {
+
+        let errorWasNotSallowed = false;
+
+        const marker = "marker777";
+        try {
+            await subject.commandCancelsNonLatestAndSwallowsError.execute(() => {throw new Error(marker)});
+            expectNotToGetToThisLine();
+        }
+        catch(e) {
+            errorWasNotSallowed = true;
+            expect(e.message).to.equal(marker);
+        }
+
+        expect(errorWasNotSallowed).to.equal(true);
+    });
+
+    it('will warn if tracker retireved for wrong method / instance or too late', async ()=> {
+
+        class Subject {
+
+            @trackAsyncNested({property:'execute'})
+            wrongMethod = command(async () => {
+                getCurrentRunTracker(this, 'decoy');
+            });
+
+            @trackAsyncNested({property:'execute'})
+            wrongTarget = command(async () => {
+                getCurrentRunTracker(new Subject(), 'wrongTarget');
+            });
+
+            @trackAsyncNested({property:'execute'})
+            retrievedTooLate = command(async() => {
+                await delay();
+                getCurrentRunTracker(new Subject(), 'retrievedTooLate');
+            });
+
+            decoy(){}
+        }
+
+        const s = new Subject();
+
+        try {
+            await s.wrongMethod.execute();
+            expectNotToGetToThisLine();
+        } catch (e) {
+            expect((e.message as string).startsWith('You are trying to get current run tracker for method decoy') ).to.equal(true);
+        }
+
+        try {
+            await s.wrongTarget.execute();
+            expectNotToGetToThisLine();
+        } catch (e) {
+            expect((e.message as string).startsWith('Target passed does not match context of currenly starting trackAsyn method') ).to.equal(true);
+        }
+
+        try {
+            await s.retrievedTooLate.execute();
+            expectNotToGetToThisLine();
+        } catch (e) {
+            expect((e.message as string).startsWith('You are trying to get current run tracker while no run is starting') ).to.equal(true);
+        }
+    });
 });

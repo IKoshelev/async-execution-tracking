@@ -44,6 +44,38 @@ import { trackAsync, getCurrentRunTracker } from 'async-execution-tracking';
 }
 ```
 
+If you are using something like a command pattern, where you expose objects with 'execute' method 
+instead of functions directly, you can use `@trackAsyncNested({ property: 'execute' })` decorator.
+
+
+```javascript
+import { trackAsyncNested, getCurrentRunTracker } from 'async-execution-tracking';
+import { command } from 'mobx-command';
+
+  class MyClass {
+  
+      //...more code
+
+      @trackAsyncNested({ property: 'execute' })
+      getAutocompleteFromServerCommand = command({
+          execute: async(query) => {
+
+            const asyncRunTracker = getCurrentRunTracker(this, 'getAutocompleteFromServerCommand');
+
+            await delay(500); 
+
+            asyncRunTracker.throwCancelationIfRunNotLatest();
+
+            const result = await repo.getAutocompleteOptions(query)
+
+            asyncRunTracker.throwCancelationIfRunNotLatest();
+
+            return result;
+        }
+      });
+}
+```
+
 ### tracking presence of outgoing async calls
 In UI you often need to disable certian buttons or the whole screen while there is an outgoing request. 
 ```javascript
