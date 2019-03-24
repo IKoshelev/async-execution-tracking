@@ -354,7 +354,15 @@ describe('@trackAsyncNested can track methods on objects like command.execute', 
 
         let finished = false;
 
-        const res = await subject.commandCancelsNonLatestAndSwallowsError.execute(() => finished = true);
+        const resPromise =  subject.commandCancelsNonLatestAndSwallowsError.execute(() => finished = true);
+
+        expect(subject.commandCancelsNonLatestAndSwallowsError.isExecuting).to.equal(true);
+        expect(subject.commandCancelsNonLatestAndSwallowsError.canExecuteCombined).to.equal(false);
+
+        let res = await resPromise;
+
+        expect(subject.commandCancelsNonLatestAndSwallowsError.isExecuting).to.equal(false);
+        expect(subject.commandCancelsNonLatestAndSwallowsError.canExecuteCombined).to.equal(true);
 
         expect(finished).to.equal(true);
         expect(res).to.equal(normalReturnA);
